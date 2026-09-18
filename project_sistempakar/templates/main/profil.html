@@ -1,0 +1,243 @@
+{% extends "main/pasien_layout.html" %}
+
+{% block title %}Profil Pasien{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
+<style>
+    .cropper-container { max-height: 400px; }
+    #imageToCrop { max-width: 100%; display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0">Manajemen Profil</h2>
+</div>
+
+<div class="row g-4">
+    <!-- Kolom Kiri: Info Dasar -->
+    <div class="col-md-6">
+        <div class="card h-100 shadow-sm border-0">
+            <div class="card-header bg-transparent border-0 pt-4 pb-0">
+                <h5 class="fw-bold text-primary mb-0"><i class="fa-solid fa-id-card me-2"></i>Informasi Dasar</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4 position-relative d-inline-block w-100">
+                    <div class="position-relative d-inline-block">
+                        {% if session.get('foto_profil') %}
+                            <img src="{{ url_for('static', filename='uploads/profiles/' ~ session.get('foto_profil')) }}" alt="Profile" class="rounded-circle shadow-sm object-fit-cover" style="width: 120px; height: 120px;">
+                        {% else %}
+                            <img src="https://ui-avatars.com/api/?name={{ session.get('nama_lengkap', 'P') }}&background=0D8ABC&color=fff&size=120" alt="Profile" class="rounded-circle shadow-sm" style="width: 120px; height: 120px;">
+                        {% endif %}
+                        
+                        <form id="form-upload-photo" action="{{ url_for('main.profil') }}" method="POST" enctype="multipart/form-data">
+                            <input type="hidden" name="action" value="upload_photo">
+                            <input type="file" id="foto_profil" name="foto_profil" class="d-none" accept="image/png, image/jpeg, image/jpg">
+                            <button type="button" class="btn btn-primary rounded-circle position-absolute bottom-0 end-0 shadow-sm" style="width: 35px; height: 35px; padding: 0;" onclick="document.getElementById('foto_profil').click();" title="Ubah Foto Profil">
+                                <i class="fa-solid fa-plus"></i>
+                            </button>
+                        </form>
+                    </div>
+                    <h5 class="fw-bold mt-3 mb-0">{{ session.get('nama_lengkap') }}</h5>
+                    <p class="text-muted">{{ session.get('username') }}</p>
+                </div>
+                
+                <form action="{{ url_for('main.profil') }}" method="POST">
+                    <input type="hidden" name="action" value="update_profile">
+                    
+                    <div class="mb-3">
+                        <label for="nama_lengkap" class="form-label fw-medium">Nama Lengkap</label>
+                        <input type="text" class="form-control" id="nama_lengkap" name="nama_lengkap" value="{{ session.get('nama_lengkap') }}" required>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="username" class="form-label fw-medium">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" value="{{ session.get('username') }}" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fa-solid fa-floppy-disk me-2"></i>Simpan Perubahan
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Kolom Kanan: Keamanan -->
+    <div class="col-md-6">
+        <div class="card h-100 shadow-sm border-0">
+            <div class="card-header bg-transparent border-0 pt-4 pb-0">
+                <h5 class="fw-bold text-danger mb-0"><i class="fa-solid fa-shield-halved me-2"></i>Keamanan Akun</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-4">Ubah kata sandi Anda secara berkala untuk menjaga keamanan akun Anda. Setelah berhasil mengubah kata sandi, Anda akan diminta untuk masuk (login) kembali.</p>
+                
+                <form action="{{ url_for('main.profil') }}" method="POST">
+                    <input type="hidden" name="action" value="change_password">
+                    
+                    <div class="mb-3">
+                        <label for="password_baru" class="form-label fw-medium">Kata Sandi Baru</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="fa-solid fa-lock text-muted"></i></span>
+                            <input type="password" class="form-control" id="password_baru" name="password_baru" required minlength="6" placeholder="Masukkan kata sandi baru">
+                        </div>
+                        <div class="form-text">Minimal 6 karakter.</div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="konfirmasi_password" class="form-label fw-medium">Konfirmasi Kata Sandi Baru</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="fa-solid fa-lock text-muted"></i></span>
+                            <input type="password" class="form-control" id="konfirmasi_password" name="konfirmasi_password" required minlength="6" placeholder="Ketik ulang kata sandi baru">
+                        </div>
+                        <div class="invalid-feedback" id="password-match-error">
+                            Kata sandi tidak cocok!
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-danger w-100" id="btn-ubah-password">
+                        <i class="fa-solid fa-key me-2"></i>Ubah Kata Sandi
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Crop Photo -->
+<div class="modal fade" id="cropModal" tabindex="-1" aria-labelledby="cropModalLabel" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold" id="cropModalLabel">Sesuaikan Foto Profil</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center bg-light">
+        <div class="cropper-container">
+            <img id="imageToCrop" src="">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+        <button type="button" class="btn btn-primary" id="btnCropSave">
+            <i class="fa-solid fa-crop-simple me-2"></i>Potong & Simpan
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const passwordInput = document.getElementById('password_baru');
+        const confirmInput = document.getElementById('konfirmasi_password');
+        const btnSubmit = document.getElementById('btn-ubah-password');
+        const errorFeedback = document.getElementById('password-match-error');
+
+        function checkPasswordMatch() {
+            if (confirmInput.value !== '' && passwordInput.value !== confirmInput.value) {
+                confirmInput.classList.add('is-invalid');
+                errorFeedback.style.display = 'block';
+                btnSubmit.disabled = true;
+            } else {
+                confirmInput.classList.remove('is-invalid');
+                errorFeedback.style.display = 'none';
+                btnSubmit.disabled = false;
+            }
+        }
+
+        passwordInput.addEventListener('keyup', checkPasswordMatch);
+        confirmInput.addEventListener('keyup', checkPasswordMatch);
+
+        // Cropper Logic
+        const fotoInput = document.getElementById('foto_profil');
+        const imageToCrop = document.getElementById('imageToCrop');
+        const cropModalEl = document.getElementById('cropModal');
+        const cropModal = new bootstrap.Modal(cropModalEl);
+        const btnCropSave = document.getElementById('btnCropSave');
+        let cropper = null;
+
+        fotoInput.addEventListener('change', function(e) {
+            const files = e.target.files;
+            if (files && files.length > 0) {
+                const file = files[0];
+                const url = URL.createObjectURL(file);
+                imageToCrop.src = url;
+                cropModal.show();
+            }
+        });
+
+        cropModalEl.addEventListener('shown.bs.modal', function () {
+            cropper = new Cropper(imageToCrop, {
+                aspectRatio: 1,
+                viewMode: 1,
+                dragMode: 'move',
+                autoCropArea: 1,
+                restore: false,
+                guides: true,
+                center: true,
+                highlight: false,
+                cropBoxMovable: true,
+                cropBoxResizable: true,
+                toggleDragModeOnDblclick: false,
+            });
+        });
+
+        cropModalEl.addEventListener('hidden.bs.modal', function () {
+            if (cropper) {
+                cropper.destroy();
+                cropper = null;
+            }
+            fotoInput.value = ''; // Reset input
+        });
+
+        btnCropSave.addEventListener('click', function() {
+            if (!cropper) return;
+            
+            const originalBtnHtml = btnCropSave.innerHTML;
+            btnCropSave.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Menyimpan...';
+            btnCropSave.disabled = true;
+
+            cropper.getCroppedCanvas({
+                width: 400,
+                height: 400,
+                imageSmoothingEnabled: true,
+                imageSmoothingQuality: 'high',
+            }).toBlob((blob) => {
+                const formData = new FormData();
+                formData.append('action', 'upload_photo');
+                // Beri nama file agar backend mendeteksi ekstensinya dengan benar
+                formData.append('foto_profil', blob, 'avatar.png');
+
+                fetch("{{ url_for('main.profil') }}", {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if(data.success) {
+                        window.location.reload();
+                    } else {
+                        alert(data.message || 'Gagal menyimpan foto.');
+                        btnCropSave.innerHTML = originalBtnHtml;
+                        btnCropSave.disabled = false;
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Terjadi kesalahan saat mengunggah foto.');
+                    btnCropSave.innerHTML = originalBtnHtml;
+                    btnCropSave.disabled = false;
+                });
+            }, 'image/png');
+        });
+    });
+</script>
+{% endblock %}

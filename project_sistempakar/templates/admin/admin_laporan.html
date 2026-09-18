@@ -1,0 +1,283 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block title %}Laporan Diagnosis{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold mb-0">Manajemen Laporan Diagnosis</h3>
+</div>
+
+<!-- Bilah Filter -->
+<div class="card mb-4 d-print-none">
+    <div class="card-body">
+        <form class="row g-3 align-items-center" method="GET" action="/admin/laporan">
+            <div class="col-md-3">
+                <input type="text" class="form-control" name="search"
+                    placeholder="Cari ID/Nama...">
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" name="penyakit">
+                    <option value="">Semua Penyakit</option>
+                    {% for p in penyakit_list %}
+                    <option value="{{ p.kode_penyakit }}">{{ p.nama_penyakit }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100 fw-bold"><i class="fas fa-search me-1"></i>
+                    Cari</button>
+            </div>
+            <div class="col-md-3">
+                <button type="button" class="btn btn-secondary w-100 fw-bold" onclick="window.print()"><i class="fas fa-print me-1"></i> Cetak</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Tabel Data -->
+<div class="card mb-4">
+    <div class="table-responsive mt-3">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>ID Laporan</th>
+                    <th>Nama Pengguna</th>
+                    <th>Tanggal Diagnosis</th>
+                    <th>Hasil Penyakit</th>
+                    <th>Tingkat Keyakinan</th>
+                    <th class="text-center d-print-none">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for lap in laporan %}
+                <tr>
+                    <td>{{ lap.id }}</td>
+                    <td>{{ lap.user }}</td>
+                    <td>{{ lap.tanggal }}</td>
+                    <td>{{ lap.penyakit }}</td>
+                    <td class="fw-bold">{{ lap.final }}%</td>
+                    <td class="text-center d-print-none">
+                        <div class="btn-group btn-group-sm">
+                            <form action="/admin/laporan/delete/{{ lap.id }}" method="POST" class="d-inline"
+                                onsubmit="return confirm('Yakin ingin menghapus laporan ini?');">
+                                <button type="submit" class="btn btn-light border text-danger">Hapus</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted">Belum ada data laporan yang sesuai.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<h4 class="fw-bold mb-3 mt-5">Statistik Laporan</h4>
+
+<!-- Statistik Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="card h-100 border">
+            <div class="card-body">
+                <p class="text-muted mb-1 small fw-bold">Total Diagnosis</p>
+                <h3 class="mb-0 fw-bold">{{ stats.total }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 border">
+            <div class="card-body">
+                <p class="text-muted mb-1 small fw-bold">Penyakit Terbanyak</p>
+                <h3 class="mb-0 fw-bold">{{ stats.teratas }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 border">
+            <div class="card-body">
+                <p class="text-muted mb-1 small fw-bold">Rata-rata Tingkat Keyakinan</p>
+                <h3 class="mb-0 fw-bold">{{ stats.rata_rata }}%</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Grafik Placeholders -->
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="card h-100 border">
+            <div class="card-header bg-transparent border-0 pt-3 pb-0">
+                <h6 class="fw-bold mb-0">Distribusi Penyakit</h6>
+            </div>
+            <div class="card-body" style="position: relative; height: 300px; width: 100%;">
+                <canvas id="chartDistribusi"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 border">
+            <div class="card-header bg-transparent border-0 pt-3 pb-0">
+                <h6 class="fw-bold mb-0">Tren Diagnosis (7 Hari)</h6>
+            </div>
+            <div class="card-body" style="position: relative; height: 300px; width: 100%;">
+                <canvas id="chartTren"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 border">
+            <div class="card-header bg-transparent border-0 pt-3 pb-0">
+                <h6 class="fw-bold mb-0">Rata-rata Persentase Keyakinan</h6>
+            </div>
+            <div class="card-body" style="position: relative; height: 300px; width: 100%;">
+                <canvas id="chartPersentase"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tombol Aksi Bawah -->
+<div class="d-flex gap-2 mb-5 d-print-none">
+    <button id="btnExportPDF" class="btn btn-danger shadow-sm"><i class="fas fa-file-pdf me-2"></i> Eksport PDF</button>
+    <button id="btnExportExcel" class="btn btn-success shadow-sm"><i class="fas fa-file-excel me-2"></i> Eksport
+        Excel</button>
+</div>
+
+<!-- MODAL AREA DIHAPUS (Hanya Read-only) -->
+
+<!-- Library Ekspor & Grafik (CDN) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    // Inisialisasi Data dari Backend (menggunakan JSON.parse agar linter editor tidak error)
+    const dataDist = JSON.parse('{{ chart_dist | safe }}');
+    const dataTrend = JSON.parse('{{ chart_trend | safe }}');
+    const dataAvg = JSON.parse('{{ chart_avg | safe }}');
+
+    // Warna Global
+    const colors = ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6f42c1', '#fd7e14'];
+
+    // 1. Grafik Distribusi Penyakit (Pie)
+    if (dataDist.length > 0) {
+        new Chart(document.getElementById('chartDistribusi'), {
+            type: 'doughnut',
+            data: {
+                labels: dataDist.map(d => d.nama_penyakit),
+                datasets: [{
+                    data: dataDist.map(d => d.count),
+                    backgroundColor: colors
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    // 2. Grafik Tren Diagnosis (Line)
+    if (dataTrend.length > 0) {
+        new Chart(document.getElementById('chartTren'), {
+            type: 'line',
+            data: {
+                labels: dataTrend.map(d => d.tgl),
+                datasets: [{
+                    label: 'Jumlah Diagnosis',
+                    data: dataTrend.map(d => d.count),
+                    borderColor: '#0d6efd',
+                    tension: 0.3,
+                    fill: true,
+                    backgroundColor: 'rgba(13, 110, 253, 0.1)'
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    // 3. Grafik Rata-rata Persentase (Bar)
+    if (dataAvg.length > 0) {
+        new Chart(document.getElementById('chartPersentase'), {
+            type: 'bar',
+            data: {
+                labels: dataAvg.map(d => d.nama_penyakit.split(' (')[0]),
+                datasets: [{
+                    label: 'Rata-rata Keyakinan (%)',
+                    data: dataAvg.map(d => d.avg_cf),
+                    backgroundColor: colors
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, max: 100 } }
+            }
+        });
+    }
+
+    // FUNGSI EKSPORT PDF
+    document.getElementById('btnExportPDF').addEventListener('click', function () {
+        const element = document.querySelector('.table-responsive');
+
+        // Sembunyikan elemen yang tidak perlu di-print
+        const opt = {
+            margin: 10,
+            filename: 'Laporan_Diagnosis_Pakar.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, scrollY: 0, windowWidth: element.scrollWidth },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+        };
+
+        // Hide print-none before converting to PDF
+        const printNone = document.querySelectorAll('.d-print-none');
+        printNone.forEach(el => el.style.display = 'none');
+        
+        // Simpan state overflow lama dan paksa visible agar html2pdf bisa membacanya
+        const oldOverflow = element.style.overflow;
+        element.style.overflow = 'visible';
+        
+        // Tambahkan teks tanggal cetak di pojok kanan bawah
+        const dateDiv = document.createElement('div');
+        dateDiv.id = 'pdf-print-date';
+        dateDiv.style.textAlign = 'right';
+        dateDiv.style.marginTop = '30px';
+        dateDiv.style.marginRight = '10px';
+        dateDiv.style.fontSize = '12px';
+        dateDiv.style.fontStyle = 'italic';
+        dateDiv.style.color = '#555';
+        const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+        dateDiv.innerHTML = 'Dicetak pada: ' + new Date().toLocaleDateString('id-ID', dateOptions);
+        element.appendChild(dateDiv);
+
+        html2pdf().set(opt).from(element).save().then(() => {
+            printNone.forEach(el => el.style.display = '');
+            element.style.overflow = oldOverflow;
+            
+            // Hapus kembali teks tanggal setelah selesai export
+            const addedDateDiv = document.getElementById('pdf-print-date');
+            if (addedDateDiv) addedDateDiv.remove();
+        });
+    });
+
+    // FUNGSI EKSPORT EXCEL
+    document.getElementById('btnExportExcel').addEventListener('click', function () {
+        const table = document.querySelector('.table');
+
+        // Buat kloningan tabel agar tidak merusak tampilan asli
+        const clone = table.cloneNode(true);
+        // Hapus kolom aksi
+        const rows = clone.querySelectorAll('tr');
+        rows.forEach(row => {
+            if (row.lastElementChild) {
+                row.removeChild(row.lastElementChild);
+            }
+        });
+
+        const wb = XLSX.utils.table_to_book(clone, { sheet: "Laporan Diagnosis" });
+        XLSX.writeFile(wb, "Laporan_Diagnosis_Pakar.xlsx");
+    });
+
+    // Fitur edit laporan telah dihapus
+</script>
+{% endblock %}

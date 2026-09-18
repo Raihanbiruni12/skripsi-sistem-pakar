@@ -1,0 +1,477 @@
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
+from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
+
+app = Flask(__name__)
+app.secret_key = 'kunci_rahasia_admin' # Diperlukan untuk flash messages
+
+import pymysql
+
+# Konfigurasi Database MySQL
+app.config['MYSQL_HOST'] = 'localhost'
+app.config['MYSQL_USER'] = 'root'
+app.config['MYSQL_PASSWORD'] = '' # Sesuaikan dengan password database Anda
+app.config['MYSQL_DB'] = 'db_pakar_kulit'
+
+def get_db_connection():
+    """Fungsi pembantu untuk membuat koneksi ke database."""
+    return pymysql.connect(
+        host=app.config['MYSQL_HOST'],
+        user=app.config['MYSQL_USER'],
+        password=app.config['MYSQL_PASSWORD'],
+        db=app.config['MYSQL_DB'],
+        cursorclass=pymysql.cursors.DictCursor
+    )
+
+def get_penyakit_info():
+    """Mengambil data master penyakit dari database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT kode_penyakit, nama_penyakit FROM tb_penyakit")
+    result = cursor.fetchall()
+    conn.close()
+    return {row['kode_penyakit']: row['nama_penyakit'] for row in result}
+
+def get_aturan_cf():
+    """Mengambil data aturan CF (MB dan MD) dari database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT kode_penyakit, kode_gejala, mb, md FROM tb_aturan_cf")
+    result = cursor.fetchall()
+    conn.close()
+    
+    aturan_cf = {}
+    for row in result:
+        kp = row['kode_penyakit']
+        kg = row['kode_gejala']
+        mb = row['mb']
+        md = row['md']
+        if kp not in aturan_cf:
+            aturan_cf[kp] = {}
+        aturan_cf[kp][kg] = (mb, md)
+    return aturan_cf
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/proses_diagnosis', methods=['POST'])
+def proses_diagnosis():
+    data = request.json
+    
+    # Menerima data dari JS (Fetch)
+    ai_prediction = data.get('ai_prediction', {}) # Cth: {"P01": 0.8, "P02": 0.1, ...}
+    gejala_user = data.get('gejala', []) # Cth: [{"kode_gejala": "G01", "cf_user": 0.8}, ...]
+
+    # Ambil data dinamis dari database MySQL
+    try:
+        penyakit_info = get_penyakit_info()
+        aturan_cf = get_aturan_cf()
+    except Exception as e:
+        print("Error koneksi database:", e)
+        return jsonify({"status": "error", "message": "Gagal terhubung ke database. Pastikan MySQL berjalan."}), 500
+
+    # ==========================================
+    # 1. PERHITUNGAN CERTAINTY FACTOR (PAKAR)
+    # ==========================================
+    hasil_cf = {}
+    for kode_penyakit, aturan in aturan_cf.items():
+        cf_combine = 0.0
+        is_first = True
+        
+        for g in gejala_user:
+            kode_g = g['kode_gejala']
+            cf_user = float(g['cf_user'])
+            
+            # Jika gejala yang dipilih user ada di aturan penyakit ini
+            if kode_g in aturan:
+                mb, md = aturan[kode_g]
+                cf_pakar = mb - md
+                cf_gejala = cf_pakar * cf_user
+                
+                # Rumus CF Combine
+                if is_first:
+                    cf_combine = cf_gejala
+                    is_first = False
+                else:
+                    cf_combine = cf_combine + (cf_gejala * (1 - cf_combine))
+                    
+        hasil_cf[kode_penyakit] = cf_combine
+
+    # Mencari penyakit dengan CF tertinggi
+    if not hasil_cf or max(hasil_cf.values()) == 0:
+        cf_tertinggi = 0
+        penyakit_cf_kode = None
+    else:
+        penyakit_cf_kode = max(hasil_cf, key=hasil_cf.get)
+        cf_tertinggi = hasil_cf[penyakit_cf_kode]
+
+    # ==========================================
+    # 2. PROSES HASIL AI
+    # ==========================================
+    if not ai_prediction:
+        prob_ai_tertinggi = 0
+        penyakit_ai_kode = None
+    else:
+        # Mencari probabilitas prediksi tertinggi dari MobileNetV2
+        penyakit_ai_kode = max(ai_prediction, key=ai_prediction.get)
+        prob_ai_tertinggi = ai_prediction[penyakit_ai_kode]
+
+    # ==========================================
+    # 3. VALIDASI HIBRIDA (AI & CF PAKAR)
+    # ==========================================
+    kesimpulan = ""
+    persentase_akhir = 0.0
+    
+    if penyakit_cf_kode and penyakit_cf_kode == penyakit_ai_kode:
+        kesimpulan = f"Validasi Kuat! AI dan Gejala Klinis mengarah pada penyakit yang sama: {penyakit_info[penyakit_cf_kode]}."
+        # Rata-rata dari nilai CF dan AI
+        persentase_akhir = (cf_tertinggi + prob_ai_tertinggi) / 2
+    elif penyakit_cf_kode and penyakit_ai_kode:
+        kesimpulan = f"Perbedaan Deteksi: AI mendeteksi {penyakit_info[penyakit_ai_kode]} ({prob_ai_tertinggi*100:.1f}%), sedangkan kondisi gejala menunjukkan kecenderungan {penyakit_info[penyakit_cf_kode]} ({cf_tertinggi*100:.1f}%)."
+        # Ambil bobot dominan (Misal: 60% Pakar, 40% AI)
+        persentase_akhir = (cf_tertinggi * 0.6) + (prob_ai_tertinggi * 0.4)
+    else:
+        kesimpulan = "Data tidak mencukupi untuk melakukan diagnosis hibrida."
+
+    return jsonify({
+        "status": "success",
+        "cf_result": {
+            "kode": penyakit_cf_kode,
+            "nama": penyakit_info.get(penyakit_cf_kode, "Tidak Diketahui"),
+            "persentase": round(cf_tertinggi * 100, 2)
+        },
+        "ai_result": {
+            "kode": penyakit_ai_kode,
+            "nama": penyakit_info.get(penyakit_ai_kode, "Tidak Diketahui"),
+            "persentase": round(prob_ai_tertinggi * 100, 2)
+        },
+        "hybrid_result": {
+            "kesimpulan": kesimpulan,
+            "persentase_akhir": round(persentase_akhir * 100, 2)
+        }
+    })
+
+# ==========================================
+# RUTING AUTENTIKASI (Fase 4.5)
+# ==========================================
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        nama_lengkap = request.form.get('nama_lengkap')
+        username = request.form.get('username')
+        password = request.form.get('password')
+        role = 'pasien' # Default role untuk semua registrasi publik
+
+        hashed_password = generate_password_hash(password)
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("INSERT INTO tb_user (nama_lengkap, username, password, role) VALUES (%s, %s, %s, %s)", (nama_lengkap, username, hashed_password, role))
+            conn.commit()
+            flash("Registrasi berhasil! Silakan login.", "success")
+            return redirect(url_for('login'))
+        except pymysql.err.IntegrityError:
+            flash("Username sudah digunakan. Silakan pilih yang lain.", "danger")
+        except Exception as e:
+            conn.rollback()
+            flash(f"Gagal registrasi: {str(e)}", "danger")
+        finally:
+            conn.close()
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM tb_user WHERE username = %s", (username,))
+        user = cursor.fetchone()
+        conn.close()
+
+        if user and check_password_hash(user['password'], password):
+            session['id_user'] = user['id_user']
+            session['username'] = user['username']
+            session['role'] = user['role']
+            session['nama_lengkap'] = user['nama_lengkap']
+            
+            flash(f"Selamat datang, {user['nama_lengkap']}!", "success")
+            if user['role'] == 'admin':
+                return redirect(url_for('admin_dashboard'))
+            else:
+                return redirect(url_for('index'))
+        else:
+            flash("Username atau password salah.", "danger")
+            
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash("Anda berhasil logout.", "success")
+    return redirect(url_for('login'))
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'role' not in session or session['role'] != 'admin':
+            flash("Akses ditolak! Anda harus login sebagai Admin.", "danger")
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# ==========================================
+# RUTING HALAMAN ADMIN (Fase 4.4)
+# ==========================================
+
+@app.route('/admin')
+@admin_required
+def admin_dashboard():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM tb_penyakit")
+    penyakit_list = cursor.fetchall()
+    
+    cursor.execute("SELECT * FROM tb_gejala")
+    gejala_list = cursor.fetchall()
+    
+    conn.close()
+    return render_template('admin.html', penyakit=penyakit_list, gejala=gejala_list, active_page='master')
+
+# --- CRUD PENYAKIT ---
+
+@app.route('/admin/penyakit/add', methods=['POST'])
+@admin_required
+def add_penyakit():
+    kode = request.form.get('kode_penyakit')
+    nama = request.form.get('nama_penyakit')
+    desc = request.form.get('deskripsi')
+    solusi = request.form.get('solusi_pengobatan')
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO tb_penyakit (kode_penyakit, nama_penyakit, deskripsi, solusi_pengobatan) VALUES (%s, %s, %s, %s)", (kode, nama, desc, solusi))
+        conn.commit()
+        flash("Penyakit berhasil ditambahkan!", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Gagal menambah penyakit: {str(e)}", "danger")
+    finally:
+        conn.close()
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/penyakit/edit/<kode>', methods=['POST'])
+@admin_required
+def edit_penyakit(kode):
+    nama = request.form.get('nama_penyakit')
+    desc = request.form.get('deskripsi')
+    solusi = request.form.get('solusi_pengobatan')
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE tb_penyakit SET nama_penyakit=%s, deskripsi=%s, solusi_pengobatan=%s WHERE kode_penyakit=%s", (nama, desc, solusi, kode))
+        conn.commit()
+        flash("Penyakit berhasil diperbarui!", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Gagal memperbarui penyakit: {str(e)}", "danger")
+    finally:
+        conn.close()
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/penyakit/delete/<kode>', methods=['POST'])
+@admin_required
+def delete_penyakit(kode):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM tb_penyakit WHERE kode_penyakit=%s", (kode,))
+        conn.commit()
+        flash("Penyakit berhasil dihapus!", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Gagal menghapus penyakit: {str(e)}", "danger")
+    finally:
+        conn.close()
+    return redirect(url_for('admin_dashboard'))
+
+# --- CRUD GEJALA ---
+
+@app.route('/admin/gejala/add', methods=['POST'])
+@admin_required
+def add_gejala():
+    kode = request.form.get('kode_gejala')
+    nama = request.form.get('nama_gejala')
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO tb_gejala (kode_gejala, nama_gejala) VALUES (%s, %s)", (kode, nama))
+        conn.commit()
+        flash("Gejala berhasil ditambahkan!", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Gagal menambah gejala: {str(e)}", "danger")
+    finally:
+        conn.close()
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/gejala/edit/<kode>', methods=['POST'])
+@admin_required
+def edit_gejala(kode):
+    nama = request.form.get('nama_gejala')
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE tb_gejala SET nama_gejala=%s WHERE kode_gejala=%s", (nama, kode))
+        conn.commit()
+        flash("Gejala berhasil diperbarui!", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Gagal memperbarui gejala: {str(e)}", "danger")
+    finally:
+        conn.close()
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/gejala/delete/<kode>', methods=['POST'])
+@admin_required
+def delete_gejala(kode):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM tb_gejala WHERE kode_gejala=%s", (kode,))
+        conn.commit()
+        flash("Gejala berhasil dihapus!", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Gagal menghapus gejala: {str(e)}", "danger")
+    finally:
+        conn.close()
+    return redirect(url_for('admin_dashboard'))
+
+# --- CRUD ATURAN CF ---
+
+@app.route('/admin/cf')
+@admin_required
+def admin_cf():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    query = """
+        SELECT a.id_rule, p.kode_penyakit, p.nama_penyakit, g.kode_gejala, g.nama_gejala, a.mb, a.md
+        FROM tb_aturan_cf a
+        JOIN tb_penyakit p ON a.kode_penyakit = p.kode_penyakit
+        JOIN tb_gejala g ON a.kode_gejala = g.kode_gejala
+        ORDER BY p.kode_penyakit, g.kode_gejala
+    """
+    cursor.execute(query)
+    rules_list = cursor.fetchall()
+    
+    cursor.execute("SELECT kode_penyakit, nama_penyakit FROM tb_penyakit")
+    penyakit_list = cursor.fetchall()
+    
+    cursor.execute("SELECT kode_gejala, nama_gejala FROM tb_gejala")
+    gejala_list = cursor.fetchall()
+    
+    conn.close()
+    return render_template('admin_cf.html', rules=rules_list, penyakit=penyakit_list, gejala=gejala_list, active_page='cf')
+
+@app.route('/admin/cf/add', methods=['POST'])
+@admin_required
+def add_cf():
+    kode_penyakit = request.form.get('kode_penyakit')
+    kode_gejala = request.form.get('kode_gejala')
+    mb = float(request.form.get('mb'))
+    md = float(request.form.get('md'))
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO tb_aturan_cf (kode_penyakit, kode_gejala, mb, md) VALUES (%s, %s, %s, %s)", (kode_penyakit, kode_gejala, mb, md))
+        conn.commit()
+        flash("Aturan CF berhasil ditambahkan!", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Gagal menambah aturan: {str(e)}", "danger")
+    finally:
+        conn.close()
+    return redirect(url_for('admin_cf'))
+
+@app.route('/admin/cf/edit/<int:id_rule>', methods=['POST'])
+@admin_required
+def edit_cf(id_rule):
+    kode_penyakit = request.form.get('kode_penyakit')
+    kode_gejala = request.form.get('kode_gejala')
+    mb = float(request.form.get('mb'))
+    md = float(request.form.get('md'))
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE tb_aturan_cf SET kode_penyakit=%s, kode_gejala=%s, mb=%s, md=%s WHERE id_rule=%s", (kode_penyakit, kode_gejala, mb, md, id_rule))
+        conn.commit()
+        flash("Aturan CF berhasil diperbarui!", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Gagal memperbarui aturan: {str(e)}", "danger")
+    finally:
+        conn.close()
+    return redirect(url_for('admin_cf'))
+
+@app.route('/admin/cf/delete/<int:id_rule>', methods=['POST'])
+@admin_required
+def delete_cf(id_rule):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM tb_aturan_cf WHERE id_rule=%s", (id_rule,))
+        conn.commit()
+        flash("Aturan CF berhasil dihapus!", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Gagal menghapus aturan: {str(e)}", "danger")
+    finally:
+        conn.close()
+    return redirect(url_for('admin_cf'))
+
+# --- LAPORAN DIAGNOSIS ---
+
+@app.route('/admin/laporan')
+@admin_required
+def admin_laporan():
+    # Dummy data for UI mockup
+    laporan_dummy = [
+        {"id": "DR001", "user": "John Doe", "tanggal": "2023-10-26", "penyakit": "Panu", "ai": "85%", "cf": "75%", "final": "80%", "status": "Selesai"},
+        {"id": "DR002", "user": "Jane Smith", "tanggal": "2023-10-25", "penyakit": "Herpes", "ai": "70%", "cf": "80%", "final": "75%", "status": "Selesai"},
+        {"id": "DR003", "user": "Peter Jones", "tanggal": "2023-10-24", "penyakit": "Jerawat", "ai": "90%", "cf": "88%", "final": "89%", "status": "Selesai"}
+    ]
+    return render_template('admin_laporan.html', laporan=laporan_dummy, active_page='laporan')
+
+# --- DUMMY ROUTES UNTUK SIDEBAR ---
+
+@app.route('/admin/dashboard')
+@admin_required
+def admin_dashboard_view():
+    return render_template('admin_placeholder.html', title="Dashboard", active_page='dashboard')
+
+@app.route('/admin/profile')
+@admin_required
+def admin_profile():
+    return render_template('admin_placeholder.html', title="Profil Administrator", active_page='profile')
+
+@app.route('/admin/settings')
+@admin_required
+def admin_settings():
+    return render_template('admin_placeholder.html', title="Pengaturan Sistem", active_page='settings')
+
+if __name__ == '__main__':
+    app.run(debug=True)

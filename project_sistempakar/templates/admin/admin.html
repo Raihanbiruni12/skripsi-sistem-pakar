@@ -1,0 +1,264 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block title %}Kelola Data Master{% endblock %}
+
+{% block content %}
+
+        <!-- TABEL PENYAKIT -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 text-primary">Master Data Penyakit</h5>
+                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAddPenyakit">
+                    + Tambah Penyakit
+                </button>
+            </div>
+            <div class="table-responsive mt-3">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Kode</th>
+                            <th>Nama Penyakit</th>
+                            <th>Deskripsi</th>
+                            <th>Solusi</th>
+                            <th class="text-center">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in penyakit %}
+                        <tr>
+                            <td class="fw-bold">{{ p.kode_penyakit }}</td>
+                            <td>{{ p.nama_penyakit }}</td>
+                            <td style="max-width: 250px;" class="text-truncate" title="{{ p.deskripsi }}">{{ p.deskripsi }}</td>
+                            <td style="max-width: 250px;" class="text-truncate" title="{{ p.solusi_pengobatan }}">{{ p.solusi_pengobatan }}</td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-warning mb-1 btn-edit-penyakit" 
+                                    data-kode="{{ p.kode_penyakit }}"
+                                    data-nama="{{ p.nama_penyakit }}"
+                                    data-desc="{{ p.deskripsi }}"
+                                    data-solusi="{{ p.solusi_pengobatan }}"
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#modalEditPenyakit">Edit</button>
+                                
+                                <form action="/admin/penyakit/delete/{{ p.kode_penyakit }}" method="POST" class="d-inline" onsubmit="return confirm('Yakin ingin menghapus penyakit ini? (Data terkait di Aturan CF juga akan terhapus)');">
+                                    <button type="submit" class="btn btn-sm btn-danger mb-1">Hapus</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% if not penyakit %}
+                        <tr><td colspan="5" class="text-center text-muted">Belum ada data penyakit.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TABEL GEJALA -->
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 text-primary">Master Data Gejala</h5>
+                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAddGejala">
+                    + Tambah Gejala
+                </button>
+            </div>
+            <div class="table-responsive mt-3">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Kode Gejala</th>
+                            <th>Nama Gejala Klinis</th>
+                            <th class="text-center">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for g in gejala %}
+                        <tr>
+                            <td class="fw-bold">{{ g.kode_gejala }}</td>
+                            <td>{{ g.nama_gejala }}</td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-warning btn-edit-gejala"
+                                    data-kode="{{ g.kode_gejala }}"
+                                    data-nama="{{ g.nama_gejala }}"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#modalEditGejala">Edit</button>
+                                
+                                <form action="/admin/gejala/delete/{{ g.kode_gejala }}" method="POST" class="d-inline" onsubmit="return confirm('Yakin ingin menghapus gejala ini? (Aturan CF terkait akan ikut terhapus)');">
+                                    <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% if not gejala %}
+                        <tr><td colspan="3" class="text-center text-muted">Belum ada data gejala.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- ======================================= -->
+    <!-- MODAL AREA -->
+    <!-- ======================================= -->
+
+    <!-- Modal Tambah Penyakit -->
+    <div class="modal fade" id="modalAddPenyakit" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form action="/admin/penyakit/add" method="POST">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Tambah Penyakit Baru</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label>Kode Penyakit</label>
+                            <input type="text" name="kode_penyakit" class="form-control" placeholder="Contoh: P05" required>
+                        </div>
+                        <div class="mb-3">
+                            <label>Nama Penyakit</label>
+                            <input type="text" name="nama_penyakit" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label>Deskripsi Medis</label>
+                            <textarea name="deskripsi" class="form-control" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label>Solusi Pengobatan</label>
+                            <textarea name="solusi_pengobatan" class="form-control" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary">Simpan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Edit Penyakit -->
+    <div class="modal fade" id="modalEditPenyakit" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="formEditPenyakit" method="POST">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit Penyakit</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Kode Penyakit Readonly karena Primary Key -->
+                        <div class="mb-3">
+                            <label>Kode Penyakit</label>
+                            <input type="text" name="kode_penyakit" id="edit_kode_penyakit" class="form-control" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label>Nama Penyakit</label>
+                            <input type="text" name="nama_penyakit" id="edit_nama_penyakit" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label>Deskripsi Medis</label>
+                            <textarea name="deskripsi" id="edit_deskripsi_penyakit" class="form-control" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label>Solusi Pengobatan</label>
+                            <textarea name="solusi_pengobatan" id="edit_solusi_penyakit" class="form-control" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-warning">Perbarui</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Tambah Gejala -->
+    <div class="modal fade" id="modalAddGejala" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form action="/admin/gejala/add" method="POST">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Tambah Gejala Baru</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label>Kode Gejala</label>
+                            <input type="text" name="kode_gejala" class="form-control" placeholder="Contoh: G09" required>
+                        </div>
+                        <div class="mb-3">
+                            <label>Nama Gejala</label>
+                            <input type="text" name="nama_gejala" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary">Simpan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Edit Gejala -->
+    <div class="modal fade" id="modalEditGejala" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="formEditGejala" method="POST">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit Gejala</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label>Kode Gejala</label>
+                            <input type="text" name="kode_gejala" id="edit_kode_gejala" class="form-control" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label>Nama Gejala</label>
+                            <input type="text" name="nama_gejala" id="edit_nama_gejala" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-warning">Perbarui</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        // JS untuk memindahkan data dari baris tabel ke Modal Edit Penyakit
+        const editPenyakitBtns = document.querySelectorAll('.btn-edit-penyakit');
+        editPenyakitBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const kode = this.getAttribute('data-kode');
+                document.getElementById('edit_kode_penyakit').value = kode;
+                document.getElementById('edit_nama_penyakit').value = this.getAttribute('data-nama');
+                document.getElementById('edit_deskripsi_penyakit').value = this.getAttribute('data-desc');
+                document.getElementById('edit_solusi_penyakit').value = this.getAttribute('data-solusi');
+                // Set action form
+                document.getElementById('formEditPenyakit').action = '/admin/penyakit/edit/' + kode;
+            });
+        });
+
+        // JS untuk memindahkan data dari baris tabel ke Modal Edit Gejala
+        const editGejalaBtns = document.querySelectorAll('.btn-edit-gejala');
+        editGejalaBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const kode = this.getAttribute('data-kode');
+                document.getElementById('edit_kode_gejala').value = kode;
+                document.getElementById('edit_nama_gejala').value = this.getAttribute('data-nama');
+                // Set action form
+                document.getElementById('formEditGejala').action = '/admin/gejala/edit/' + kode;
+            });
+        });
+    </script>
+{% endblock %}

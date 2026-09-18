@@ -1,0 +1,104 @@
+{% extends "main/pasien_layout.html" %}
+
+{% block title %}Pengaturan Pasien{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0">Pengaturan</h2>
+</div>
+
+<div class="row g-4">
+    <!-- Kolom Kiri: Tema Visual -->
+    <div class="col-md-6">
+        <div class="card h-100 shadow-sm border-0">
+            <div class="card-header bg-transparent border-0 pt-4 pb-0">
+                <h5 class="fw-bold text-primary mb-0"><i class="fa-solid fa-moon me-2"></i>Tema Visual</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-4">Ubah tampilan aplikasi menjadi gelap untuk mengurangi ketegangan mata, terutama saat digunakan di ruangan minim cahaya.</p>
+                
+                <div class="d-flex justify-content-between align-items-center p-3 border rounded">
+                    <div>
+                        <h6 class="fw-bold mb-1">Mode Gelap (Dark Mode)</h6>
+                        <small class="text-muted">Aktifkan tema gelap di seluruh halaman</small>
+                    </div>
+                    <div class="form-check form-switch fs-4 mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="darkModeSwitch">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Kolom Kanan: Preferensi Notifikasi -->
+    <div class="col-md-6">
+        <div class="card h-100 shadow-sm border-0">
+            <div class="card-header bg-transparent border-0 pt-4 pb-0">
+                <h5 class="fw-bold text-danger mb-0"><i class="fa-regular fa-bell-slash me-2"></i>Preferensi Notifikasi</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-4">Kelola bagaimana aplikasi berinteraksi dan mengirimkan pengingat evaluasi kondisi kesehatan kulit Anda.</p>
+                
+                <div class="d-flex justify-content-between align-items-center p-3 border rounded">
+                    <div>
+                        <h6 class="fw-bold mb-1">Senyapkan Notifikasi</h6>
+                        <small class="text-muted">Matikan pengingat otomatis di ikon lonceng</small>
+                    </div>
+                    <div class="form-check form-switch fs-4 mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="notificationSwitch">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const darkModeSwitch = document.getElementById('darkModeSwitch');
+        const notificationSwitch = document.getElementById('notificationSwitch');
+
+        // Set initial state from localStorage
+        if (localStorage.getItem('theme') === 'dark') {
+            darkModeSwitch.checked = true;
+        }
+
+        if (localStorage.getItem('disable_notifications') === 'true') {
+            notificationSwitch.checked = true;
+        }
+
+        // Dark Mode Logic
+        darkModeSwitch.addEventListener('change', function() {
+            if (this.checked) {
+                document.documentElement.setAttribute('data-bs-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+            } else {
+                document.documentElement.setAttribute('data-bs-theme', 'light');
+                localStorage.setItem('theme', 'light');
+            }
+        });
+
+        // Notification Logic
+        notificationSwitch.addEventListener('change', function() {
+            if (this.checked) {
+                localStorage.setItem('disable_notifications', 'true');
+                // Hapus badge jika sedang aktif
+                const notifBadge = document.getElementById("notif-badge");
+                if(notifBadge) notifBadge.classList.add("d-none");
+            } else {
+                localStorage.setItem('disable_notifications', 'false');
+                // Trigger fetch manual agar pengguna tidak perlu refresh
+                fetch("{{ url_for('main.get_notifications') }}")
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.length > 0) {
+                            document.getElementById("notif-badge").classList.remove("d-none");
+                        }
+                    });
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cetak Laporan Diagnosis - Sistem Pakar</title>
+    <!-- Use a very simple, bulletproof CSS for printing -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            color: #000;
+            background-color: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 5px;
+        }
+        p.subtitle {
+            text-align: center;
+            color: #555;
+            margin-top: 0;
+            margin-bottom: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #333;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .text-center {
+            text-align: center;
+        }
+        .fw-bold {
+            font-weight: bold;
+        }
+        @media print {
+            body { padding: 0; }
+            @page { margin: 1.5cm; }
+            button { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Laporan Hasil Diagnosis</h2>
+    <p class="subtitle">Sistem Pakar Penyakit Kulit</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th class="text-center" style="width: 50px;">No</th>
+                <th>ID Laporan</th>
+                <th>Nama Pengguna</th>
+                <th>Tanggal Diagnosis</th>
+                <th>Hasil Penyakit</th>
+                <th class="text-center">Tingkat Keyakinan</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for lap in laporan %}
+            <tr>
+                <td class="text-center">{{ loop.index }}</td>
+                <td>{{ lap.id }}</td>
+                <td>{{ lap.user }}</td>
+                <td>{{ lap.tanggal }}</td>
+                <td>{{ lap.penyakit }}</td>
+                <td class="text-center fw-bold">{{ lap.final }}%</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" class="text-center">Belum ada data laporan yang sesuai.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div style="text-align: right; margin-top: 50px;">
+        <p>Dicetak pada: <script>document.write(new Date().toLocaleDateString('id-ID'));</script></p>
+    </div>
+
+    <!-- Automatically open print dialog when page loads -->
+    <script>
+        window.onload = function() {
+            window.print();
+        };
+    </script>
+</body>
+</html>

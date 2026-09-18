@@ -1,0 +1,166 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block title %}Kelola Aturan CF{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 text-primary">Basis Aturan Pakar (Rule Base CF)</h5>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAddRule">
+            + Tambah Aturan
+        </button>
+    </div>
+    <div class="table-responsive mt-3">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Penyakit</th>
+                    <th>Gejala Klinis</th>
+                    <th class="text-center">MB (Belief)</th>
+                    <th class="text-center">MD (Disbelief)</th>
+                    <th class="text-center">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rules %}
+                <tr>
+                    <td><span class="fw-bold">{{ r.kode_penyakit }}</span> - {{ r.nama_penyakit }}</td>
+                    <td><span class="fw-bold">{{ r.kode_gejala }}</span> - {{ r.nama_gejala }}</td>
+                    <td class="text-center">{{ r.mb }}</td>
+                    <td class="text-center">{{ r.md }}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-warning btn-edit-rule" 
+                            data-id="{{ r.id_rule }}"
+                            data-penyakit="{{ r.kode_penyakit }}"
+                            data-gejala="{{ r.kode_gejala }}"
+                            data-mb="{{ r.mb }}"
+                            data-md="{{ r.md }}"
+                            data-bs-toggle="modal" 
+                            data-bs-target="#modalEditRule">Edit</button>
+                        
+                        <form action="/admin/cf/delete/{{ r.id_rule }}" method="POST" class="d-inline" onsubmit="return confirm('Yakin ingin menghapus aturan ini?');">
+                            <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not rules %}
+                <tr><td colspan="5" class="text-center text-muted">Belum ada aturan CF.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal Tambah Aturan -->
+<div class="modal fade" id="modalAddRule" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="/admin/cf/add" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title">Tambah Aturan CF</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Penyakit</label>
+                        <select name="kode_penyakit" class="form-select" required>
+                            <option value="">-- Pilih Penyakit --</option>
+                            {% for p in penyakit %}
+                            <option value="{{ p.kode_penyakit }}">{{ p.kode_penyakit }} - {{ p.nama_penyakit }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Gejala</label>
+                        <select name="kode_gejala" class="form-select" required>
+                            <option value="">-- Pilih Gejala --</option>
+                            {% for g in gejala %}
+                            <option value="{{ g.kode_gejala }}">{{ g.kode_gejala }} - {{ g.nama_gejala }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nilai MB (0.0 - 1.0)</label>
+                            <input type="number" step="0.1" min="0" max="1" name="mb" class="form-control" placeholder="Contoh: 0.8" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nilai MD (0.0 - 1.0)</label>
+                            <input type="number" step="0.1" min="0" max="1" name="md" class="form-control" placeholder="Contoh: 0.1" required>
+                        </div>
+                    </div>
+                    <small class="text-muted">Aturan CF merepresentasikan hubungan kepakaran: seberapa yakin gejala ini menunjukkan penyakit tersebut.</small>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-primary">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Edit Aturan -->
+<div class="modal fade" id="modalEditRule" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="formEditRule" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Aturan CF</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Penyakit</label>
+                        <select name="kode_penyakit" id="edit_kode_penyakit" class="form-select" required>
+                            {% for p in penyakit %}
+                            <option value="{{ p.kode_penyakit }}">{{ p.kode_penyakit }} - {{ p.nama_penyakit }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Gejala</label>
+                        <select name="kode_gejala" id="edit_kode_gejala" class="form-select" required>
+                            {% for g in gejala %}
+                            <option value="{{ g.kode_gejala }}">{{ g.kode_gejala }} - {{ g.nama_gejala }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nilai MB</label>
+                            <input type="number" step="0.1" min="0" max="1" name="mb" id="edit_mb" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nilai MD</label>
+                            <input type="number" step="0.1" min="0" max="1" name="md" id="edit_md" class="form-control" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-warning">Perbarui</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const editRuleBtns = document.querySelectorAll('.btn-edit-rule');
+    editRuleBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const idRule = this.getAttribute('data-id');
+            document.getElementById('edit_kode_penyakit').value = this.getAttribute('data-penyakit');
+            document.getElementById('edit_kode_gejala').value = this.getAttribute('data-gejala');
+            document.getElementById('edit_mb').value = this.getAttribute('data-mb');
+            document.getElementById('edit_md').value = this.getAttribute('data-md');
+            // Set action form
+            document.getElementById('formEditRule').action = '/admin/cf/edit/' + idRule;
+        });
+    });
+</script>
+{% endblock %}

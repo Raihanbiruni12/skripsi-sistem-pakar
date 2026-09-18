@@ -1,0 +1,47 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block title %}Pengaturan Sistem{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold mb-0">Pengaturan Sistem</h3>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-header border-bottom-0 pt-4 pb-0">
+        <h5 class="fw-bold mb-0">Konfigurasi Umum Aplikasi</h5>
+    </div>
+    <div class="card-body">
+        <form action="/admin/settings" method="POST">
+            
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Nama Sistem (Aplikasi)</label>
+                    <input type="text" class="form-control" name="nama_sistem" value="{{ app_settings.nama_sistem }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Email Administrator</label>
+                    <input type="email" class="form-control" name="email_admin" value="{{ app_settings.email_admin }}">
+                </div>
+            </div>
+            
+            <hr class="mb-4 text-muted">
+            
+            <h6 class="fw-bold mb-3">Pengaturan Antarmuka</h6>
+            
+            <div class="mb-3 form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="switchDark" name="dark_mode" {% if app_settings.dark_mode %}checked{% endif %}>
+                <label class="form-check-label" for="switchDark">Aktifkan Mode Gelap (Dark Mode)</label>
+            </div>
+            
+            <div class="mb-4 form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="switchMaintenance" name="maintenance_mode" {% if app_settings.maintenance_mode %}checked{% endif %}>
+                <label class="form-check-label text-danger" for="switchMaintenance">Aktifkan Mode Perbaikan (Maintenance Mode)</label>
+                <div class="form-text">Jika aktif, pasien tidak akan bisa mengakses situs ini.</div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary px-4"><i class="fas fa-save me-2"></i> Simpan Pengaturan</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

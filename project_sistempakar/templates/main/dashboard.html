@@ -1,0 +1,177 @@
+{% extends "main/pasien_layout.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0">Selamat Datang di Dashboard Pakar Kulit</h2>
+</div>
+
+<!-- Stats Row -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body stat-card d-flex flex-column align-items-center justify-content-center text-center">
+                <i class="fa-solid fa-file-medical text-danger" style="font-size: 2rem;"></i>
+                <h3 class="fs-5 fw-bold mt-3 mb-1">{{ stats.total }}</h3>
+                <p class="text-muted small mb-0 text-uppercase" style="letter-spacing: 1px;">Total Diagnosa</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body stat-card d-flex flex-column align-items-center justify-content-center text-center">
+                <i class="fa-solid fa-percent text-warning" style="font-size: 2rem;"></i>
+                <h3 class="fs-5 fw-bold mt-3 mb-1">{{ stats.avg_cf }}%</h3>
+                <p class="text-muted small mb-0 text-uppercase" style="letter-spacing: 1px;">Rata-rata Keyakinan</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body stat-card d-flex flex-column align-items-center justify-content-center text-center">
+                <i class="fa-solid fa-virus text-success" style="font-size: 2rem;"></i>
+                <h3 class="fs-5 fw-bold mt-3 mb-1">{{ stats.terbanyak }}</h3>
+                <p class="text-muted small mb-0 text-uppercase" style="letter-spacing: 1px;">Penyakit Terbanyak</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-body stat-card d-flex flex-column align-items-center justify-content-center text-center">
+                <i class="fa-regular fa-calendar-check text-primary" style="font-size: 2rem;"></i>
+                <h3 class="fs-5 fw-bold mt-3 mb-1">{{ stats.last_date }}</h3>
+                <p class="text-muted small mb-0 text-uppercase" style="letter-spacing: 1px;">Diagnosa Terakhir</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- Recent Activity Table -->
+    <div class="col-lg-7">
+        <div class="card h-100">
+            <div class="card-header">
+                Aktivitas Diagnosa Terbaru
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4">ID Riwayat</th>
+                                <th>Hasil Penyakit</th>
+                                <th>Tanggal</th>
+                                <th>Keyakinan</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for history in recent_history %}
+                            <tr>
+                                <td class="ps-4 text-muted">{{ history.id_riwayat }}</td>
+                                <td class="fw-medium">{{ history.nama_penyakit }}</td>
+                                <td>{{ history.tanggal }}</td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="progress flex-grow-1 me-2" style="height: 6px;">
+                                            <div class="progress-bar bg-primary" role="progressbar" data-width="{{ history.persentase_akhir }}%"></div>
+                                        </div>
+                                        <small>{{ history.persentase_akhir }}%</small>
+                                    </div>
+                                </td>
+                                <td><span class="badge bg-success-subtle text-success">Selesai</span></td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">Belum ada aktivitas diagnosa.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart Placeholder -->
+    <div class="col-lg-5">
+        <div class="card h-100">
+            <div class="card-header">
+                Statistik Keyakinan Diagnosa
+            </div>
+            <div class="card-body bg-transparent">
+                {% if stats.total > 0 %}
+                    <div style="position: relative; height: 300px; width: 100%;">
+                        <canvas id="historyChart"></canvas>
+                    </div>
+                {% else %}
+                    <div class="d-flex flex-column justify-content-center align-items-center h-100" style="min-height: 300px;">
+                        <i class="fa-solid fa-chart-line fs-1 text-muted mb-3"></i>
+                        <p class="text-muted">Grafik akan muncul setelah Anda melakukan diagnosa.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bottom Actions -->
+<div class="d-flex gap-3 mb-5">
+    <a href="{{ url_for('main.diagnosis') }}" class="btn btn-primary px-4 py-2 fw-medium shadow-sm"><i class="fa-solid fa-plus me-2"></i>Mulai Diagnosa Baru</a>
+    <a href="{{ url_for('main.history') }}" class="btn btn-outline-secondary px-4 py-2 fw-medium shadow-sm">Lihat Semua Riwayat</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if stats.total > 0 %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Prepare data for chart (reversing to show chronological order)
+    // Menggunakan JSON.parse agar linter editor tidak error
+    const recentData = JSON.parse('{{ recent_history | tojson | safe }}');
+    const labels = recentData.map(d => d.tanggal).reverse();
+    const dataPoints = recentData.map(d => d.persentase_akhir).reverse();
+
+    const ctx = document.getElementById('historyChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Tingkat Keyakinan (%)',
+                data: dataPoints,
+                borderColor: '#0d6efd',
+                backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                borderWidth: 2,
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+</script>
+<script>
+    // Apply width to progress bars dynamically to avoid VSCode CSS Linter errors
+    document.querySelectorAll('.progress-bar').forEach(function(bar) {
+        if (bar.dataset.width) {
+            bar.style.width = bar.dataset.width;
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

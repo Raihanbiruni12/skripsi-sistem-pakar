@@ -1,0 +1,451 @@
+{% extends "main/pasien_layout.html" if session.get('role') == 'pasien' else "main/public_layout.html" %}
+
+{% block title %}Sistem Pakar Kulit Hibrida{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<style>
+    .upload-area {
+        border: 2px dashed #0d6efd;
+        border-radius: 10px;
+        padding: 2rem;
+        text-align: center;
+        cursor: pointer;
+        transition: 0.3s;
+        background-color: #f8f9fa;
+    }
+
+    .upload-area:hover {
+        background-color: #e9ecef;
+    }
+
+    [data-bs-theme="dark"] .upload-area {
+        background-color: #212529;
+    }
+
+    [data-bs-theme="dark"] .upload-area:hover {
+        background-color: #343a40;
+    }
+
+    [data-bs-theme="dark"] .upload-area p {
+        color: #f8f9fa !important;
+    }
+
+    [data-bs-theme="dark"] .upload-area p.text-secondary {
+        color: #adb5bd !important;
+    }
+
+    #preview-img {
+        max-width: 100%;
+        max-height: 300px;
+        display: none;
+        border-radius: 8px;
+        margin-top: 15px;
+    }
+
+    .hidden {
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+        <div class="row justify-content-center">
+
+            <div class="col-md-5 mb-4">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-header bg-transparent border-0 pt-4 pb-0">
+                        <h5 class="fw-bold text-primary">Tahap 1: Deteksi Visual AI</h5>
+                        <p class="text-muted small">Unggah foto lesi kulit Anda untuk dipindai oleh MobileNetV2.</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="upload-area mb-3" data-bs-toggle="modal" data-bs-target="#inputOptionModal">
+                            <i class="fa-solid fa-cloud-arrow-up fs-2 text-primary mb-2"></i>
+                            <p class="mb-0 fw-medium">Pilih Foto atau Buka Kamera</p>
+                            <p class="mb-0 text-secondary small">(Klik di sini)</p>
+                            <input type="file" id="file-input" class="hidden" accept="image/png, image/jpeg">
+                        </div>
+                        <div class="text-center position-relative">
+                            <img id="preview-img" src="" alt="Preview Foto">
+                            <button id="btn-reselect" class="btn btn-sm btn-danger position-absolute top-0 end-0 mt-3 me-2 hidden" onclick="resetImage()">
+                                <i class="fa-solid fa-xmark"></i> Hapus
+                            </button>
+                        </div>
+                        
+                        <!-- Modal Pilihan Input -->
+                        <div class="modal fade" id="inputOptionModal" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content border-0 shadow">
+                                    <div class="modal-header border-0 bg-light">
+                                        <h5 class="modal-title fw-bold">Pilih Sumber Gambar</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body p-4 text-center">
+                                        <div class="row g-3">
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-primary w-100 py-4 h-100 d-flex flex-column align-items-center justify-content-center" onclick="triggerFileInput()">
+                                                    <i class="fa-solid fa-folder-open fs-1 mb-2"></i>
+                                                    <span class="fw-medium">Galeri / Folder</span>
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-success w-100 py-4 h-100 d-flex flex-column align-items-center justify-content-center" onclick="openCamera()">
+                                                    <i class="fa-solid fa-camera fs-1 mb-2"></i>
+                                                    <span class="fw-medium">Kamera</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modal Kamera WebRTC -->
+                        <div class="modal fade" id="cameraModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content border-0 shadow">
+                                    <div class="modal-header border-0 bg-dark text-white">
+                                        <h5 class="modal-title fw-bold">Arahkan Kamera ke Lesi Kulit</h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="stopCamera()"></button>
+                                    </div>
+                                    <div class="modal-body p-0 bg-black text-center position-relative">
+                                        <video id="videoElement" autoplay playsinline style="width: 100%; max-height: 70vh; object-fit: cover;"></video>
+                                        <canvas id="canvasElement" class="hidden"></canvas>
+                                        <div id="cameraLoading" class="position-absolute top-50 start-50 translate-middle text-white">
+                                            <div class="spinner-border text-light" role="status"></div>
+                                            <p class="mt-2 mb-0 small">Mengakses kamera...</p>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer border-0 bg-dark justify-content-center py-3">
+                                        <button type="button" class="btn btn-light btn-lg rounded-circle shadow" style="width: 70px; height: 70px; display: flex; align-items: center; justify-content: center;" onclick="captureImage()">
+                                            <i class="fa-solid fa-camera fs-3"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-7 mb-4">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-header bg-transparent border-0 pt-4 pb-0">
+                        <h5 class="fw-bold text-primary">Tahap 2: Validasi Gejala Pakar</h5>
+                        <p class="text-muted small">Pilih gejala fisik yang Anda rasakan untuk perhitungan Certainty
+                            Factor.</p>
+                    </div>
+                    <div class="card-body">
+                        <form id="gejala-form">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Pilih</th>
+                                            <th>Gejala Klinis</th>
+                                            <th style="width: 40%">Tingkat Keyakinan (CF User)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for g in gejala %}
+                                        <tr>
+                                            <td><input class="form-check-input gejala-checkbox" type="checkbox"
+                                                    value="{{ g.kode_gejala }}" id="{{ g.kode_gejala|lower }}"></td>
+                                            <td><label class="form-check-label" for="{{ g.kode_gejala|lower }}">{{ g.nama_gejala }}</label></td>
+                                            <td>
+                                                <select class="form-select form-select-sm cf-user-select" id="cf_{{ g.kode_gejala|lower }}"
+                                                    disabled>
+                                                    <option value="0">Pilih...</option>
+                                                    <option value="0.2">Sedikit Yakin (0.2)</option>
+                                                    <option value="0.4">Cukup Yakin (0.4)</option>
+                                                    <option value="0.6">Yakin (0.6)</option>
+                                                    <option value="0.8">Sangat Yakin (0.8)</option>
+                                                    <option value="1.0">Pasti Yakin (1.0)</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-5">
+            <div class="col-12 text-center">
+                <button id="btn-proses" class="btn btn-primary btn-lg w-50 shadow-sm" disabled>Mulai Diagnosis
+                    Hibrida</button>
+                
+                <!-- Indikator Loading -->
+                <div id="loadingIndicator" class="mt-3 d-none">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="text-muted mt-2">Sedang memproses AI dan aturan pakar...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Area Hasil Prediksi -->
+        <div class="row justify-content-center mb-5">
+            <div class="col-md-8">
+                <div id="predictionResult"></div>
+            </div>
+        </div>
+
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        // Modal instances
+        let inputOptionModal, cameraModal;
+        document.addEventListener('DOMContentLoaded', () => {
+            inputOptionModal = new bootstrap.Modal(document.getElementById('inputOptionModal'));
+            cameraModal = new bootstrap.Modal(document.getElementById('cameraModal'));
+        });
+
+        // 1. Trigger File Input from Option Modal
+        function triggerFileInput() {
+            inputOptionModal.hide();
+            document.getElementById('file-input').click();
+        }
+
+        // WebRTC Variables
+        const video = document.getElementById('videoElement');
+        const canvas = document.getElementById('canvasElement');
+        const cameraLoading = document.getElementById('cameraLoading');
+        let stream = null;
+
+        // 2. Open WebRTC Camera
+        async function openCamera() {
+            inputOptionModal.hide();
+            cameraModal.show();
+            cameraLoading.style.display = 'block';
+            video.style.display = 'none';
+            
+            try {
+                // Request back camera
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' }, 
+                    audio: false 
+                });
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    cameraLoading.style.display = 'none';
+                    video.style.display = 'block';
+                };
+            } catch (err) {
+                console.error("Camera access denied or error:", err);
+                cameraLoading.innerHTML = '<p class="text-danger small">Kamera tidak dapat diakses.</p>';
+            }
+        }
+
+        // 3. Stop Camera Stream
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            video.srcObject = null;
+        }
+
+        // 4. Capture Image from Video
+        function captureImage() {
+            if (!stream) return;
+            // Set canvas size to match video aspect ratio
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            // Draw current video frame to canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // Convert to Base64 image
+            const dataURL = canvas.toDataURL('image/jpeg', 0.9);
+            
+            // Set as preview
+            setPreviewImage(dataURL);
+            
+            // Cleanup & Close
+            stopCamera();
+            cameraModal.hide();
+        }
+
+        const fileInput = document.getElementById('file-input');
+        const previewImg = document.getElementById('preview-img');
+        const btnReselect = document.getElementById('btn-reselect');
+        let isImageUploaded = false;
+
+        // Handle File Input Change (Gallery)
+        fileInput.addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (event) {
+                    setPreviewImage(event.target.result);
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Helper to set preview image and UI state
+        function setPreviewImage(src) {
+            previewImg.src = src;
+            previewImg.style.display = 'inline-block';
+            btnReselect.classList.remove('hidden');
+            document.querySelector('.upload-area').style.display = 'none';
+            isImageUploaded = true;
+            checkReadyState();
+        }
+
+        // Helper to reset image preview
+        function resetImage() {
+            previewImg.src = '';
+            previewImg.style.display = 'none';
+            btnReselect.classList.add('hidden');
+            document.querySelector('.upload-area').style.display = 'block';
+            fileInput.value = '';
+            isImageUploaded = false;
+            checkReadyState();
+            document.getElementById('predictionResult').innerHTML = '';
+        }
+
+        // 5. Mengaktifkan dropdown CF hanya jika checkbox dicentang
+        const checkboxes = document.querySelectorAll('.gejala-checkbox');
+        checkboxes.forEach(chk => {
+            chk.addEventListener('change', function () {
+                const selectId = 'cf_' + this.value.toLowerCase();
+                const selectEl = document.getElementById(selectId);
+                if (this.checked) {
+                    selectEl.disabled = false;
+                    selectEl.value = "1.0"; // Set Default ke pasti yakin
+                } else {
+                    selectEl.disabled = true;
+                    selectEl.value = "0";
+                }
+                checkReadyState();
+            });
+        });
+
+        // 6. Validasi Tombol Proses (Tombol nyala kalau Foto ADA & Gejala DICENTANG)
+        const btnProses = document.getElementById('btn-proses');
+        function checkReadyState() {
+            const isGejalaChecked = document.querySelectorAll('.gejala-checkbox:checked').length > 0;
+            if (isImageUploaded && isGejalaChecked) {
+                btnProses.disabled = false;
+            } else {
+                btnProses.disabled = true;
+            }
+            saveFormState(); // Save state whenever ready state is checked
+        }
+
+        // ==========================================
+        // 7. SESSION STORAGE (State Persistence)
+        // ==========================================
+        
+        let isRestoring = false;
+
+        function saveFormState() {
+            if (isRestoring) return; // Mencegah penyimpanan saat sedang memulihkan data
+
+            // Save Image
+            if (isImageUploaded && previewImg.src.startsWith('data:image')) {
+                try {
+                    sessionStorage.setItem('savedImage', previewImg.src);
+                } catch (e) {
+                    console.warn("Gambar terlalu besar untuk disimpan sementara.");
+                }
+            } else if (!isImageUploaded) {
+                sessionStorage.removeItem('savedImage');
+            }
+
+            // Save Gejala & CF
+            let checkedGejala = [];
+            let cfValues = {};
+            document.querySelectorAll('.gejala-checkbox').forEach(chk => {
+                if (chk.checked) {
+                    checkedGejala.push(chk.value);
+                    const selectId = 'cf_' + chk.value.toLowerCase();
+                    cfValues[chk.value] = document.getElementById(selectId).value;
+                }
+            });
+            sessionStorage.setItem('savedGejala', JSON.stringify({ checked: checkedGejala, cfValues: cfValues }));
+
+            // Save Report Result
+            const resultHtml = document.getElementById('predictionResult').innerHTML;
+            if (resultHtml.trim() !== '') {
+                sessionStorage.setItem('savedReport', resultHtml);
+            } else {
+                sessionStorage.removeItem('savedReport');
+            }
+        }
+
+        function restoreFormState() {
+            isRestoring = true; // Kunci sementara
+            try {
+                // Restore Image
+                const savedImage = sessionStorage.getItem('savedImage');
+                if (savedImage) {
+                    setPreviewImage(savedImage);
+                }
+
+                // Restore Gejala
+                const savedGejalaRaw = sessionStorage.getItem('savedGejala');
+                if (savedGejalaRaw) {
+                    const savedGejala = JSON.parse(savedGejalaRaw);
+                    document.querySelectorAll('.gejala-checkbox').forEach(chk => {
+                        if (savedGejala.checked.includes(chk.value)) {
+                            chk.checked = true;
+                            const selectId = 'cf_' + chk.value.toLowerCase();
+                            const selectEl = document.getElementById(selectId);
+                            selectEl.disabled = false;
+                            selectEl.value = savedGejala.cfValues[chk.value];
+                        }
+                    });
+                }
+
+                // Restore Report Result
+                const savedReport = sessionStorage.getItem('savedReport');
+                if (savedReport) {
+                    document.getElementById('predictionResult').innerHTML = savedReport;
+                }
+                
+                // Panggil sekali di akhir
+                checkReadyState();
+            } finally {
+                isRestoring = false; // Buka kunci
+            }
+        }
+
+        // Tambahkan event listener untuk select box CF agar disimpan saat diubah
+        document.querySelectorAll('select[id^="cf_"]').forEach(sel => {
+            sel.addEventListener('change', checkReadyState);
+        });
+
+        // Pantau perubahan pada div predictionResult agar tersimpan saat laporan keluar
+        const observer = new MutationObserver(saveFormState);
+        observer.observe(document.getElementById('predictionResult'), { childList: true, subtree: true });
+
+        // Restore state saat halaman dimuat
+        document.addEventListener('DOMContentLoaded', () => {
+            // Deteksi apakah halaman sengaja di-refresh (F5 / tombol reload)
+            const isReload = (window.performance && window.performance.navigation && window.performance.navigation.type === 1) || 
+                             (window.performance && window.performance.getEntriesByType && window.performance.getEntriesByType("navigation").length > 0 && window.performance.getEntriesByType("navigation")[0].type === "reload");
+            
+            if (isReload) {
+                // Bersihkan memori jika halaman di-refresh manual
+                sessionStorage.removeItem('savedImage');
+                sessionStorage.removeItem('savedGejala');
+                sessionStorage.removeItem('savedReport');
+            } else {
+                // Pulihkan data jika kembali dari halaman (navigasi biasa)
+                restoreFormState();
+            }
+        });
+
+    </script>
+    <script src="/static/js/script.js?v=1"></script>
+{% endblock %}

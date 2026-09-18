@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="id" {% if app_settings.dark_mode %}data-bs-theme="dark"{% endif %}>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Sedang Perbaikan</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .maintenance-icon {
+            font-size: 80px;
+            color: #ffc107;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="text-center p-5 shadow-sm rounded border bg-body">
+        <i class="fas fa-tools maintenance-icon"></i>
+        <h1 class="fw-bold mb-3">Sistem Sedang Perbaikan</h1>
+        <p class="lead mb-4" style="max-width: 500px;">
+            Mohon maaf, <strong>{{ app_settings.nama_sistem }}</strong> saat ini sedang dalam pemeliharaan rutin. Kami akan segera kembali!
+        </p>
+        <p class="text-muted small">Jika Anda admin, silakan <a href="/login" class="text-decoration-none">login di sini</a>.</p>
+    </div>
+</body>
+</html>
